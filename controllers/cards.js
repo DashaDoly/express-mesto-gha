@@ -3,6 +3,7 @@ const { default: mongoose } = require('mongoose');
 const Card = require('../models/card');
 const BadRequestError = require('../errors/BadRequestError');
 const NotFoundError = require('../errors/NotFoundError');
+const ForbiddenError = require('../errors/ForbiddenError');
 
 module.exports.createCard = (req, res, next) => {
   const { name, link } = req.body;
@@ -21,11 +22,6 @@ module.exports.createCard = (req, res, next) => {
       } else {
         next(err);
       }
-      // if (err.name === 'ValidationError') {
-      //   res.status(400).send({ message: err.message });
-      // } else {
-      //   res.status(500).send({ message: 'Ошибка на сервере' });
-      // }
     });
 };
 
@@ -37,9 +33,28 @@ module.exports.getCards = (req, res, next) => {
 };
 
 module.exports.deleteCard = (req, res, next) => {
-  Card.findByIdAndRemove(req.params.cardId)
-    .orFail()
-    .then(() => { res.status(HTTP_STATUS_OK).send({ message: 'Карточка удалена' }); })
+  Card.findById(req.params.cardId)
+    .then((card) => {
+      if (!card.owner.equals(req.user._id)) {
+        throw new ForbiddenError('Карточка создана другим пользователем');
+      }
+      Card.deleteOne(card)
+        .orFail()
+        .then(() => { res.status(HTTP_STATUS_OK).send({ message: 'Карточка удалена' }); })
+        .catch((err) => {
+          switch (err.constructor) {
+            case mongoose.Error.DocumentNotFoundError:
+              next(new NotFoundError('Карточка с данным id не найдена'));
+              break;
+            case mongoose.Error.CastError:
+              next(new BadRequestError('Некорректный id карточки'));
+              break;
+            default:
+              next(err);
+              break;
+          }
+        });
+    })
     .catch((err) => {
       switch (err.constructor) {
         case mongoose.Error.DocumentNotFoundError:
@@ -52,13 +67,6 @@ module.exports.deleteCard = (req, res, next) => {
           next(err);
           break;
       }
-      // if (err.message === 'NotFoundId') {
-      //   res.status(404).send({ message: 'Карточка с данным id не найдена' });
-      // } else if (err.name === 'CastError') {
-      //   res.status(400).send({ message: 'Некорректный id карточки' });
-      // } else {
-      //   res.status(500).send({ message: 'Ошибка на сервере' });
-      // }
     });
 };
 
@@ -79,13 +87,6 @@ module.exports.likeCard = (req, res, next) => {
           next(err);
           break;
       }
-      // if (err.message === 'NotFoundId') {
-      //   res.status(404).send({ message: 'Карточка с данным id не найдена' });
-      // } else if (err.name === 'CastError') {
-      //   res.status(400).send({ message: 'Некорректный id карточки' });
-      // } else {
-      //   res.status(500).send({ message: 'Ошибка на сервере' });
-      // }
     });
 };
 
@@ -106,12 +107,5 @@ module.exports.dislikeCard = (req, res, next) => {
           next(err);
           break;
       }
-      // if (err.message === 'NotFoundId') {
-      //   res.status(404).send({ message: 'Карточка с данным id не найдена' });
-      // } else if (err.name === 'CastError') {
-      //   res.status(400).send({ message: 'Некорректный id карточки' });
-      // } else {
-      //   res.status(500).send({ message: 'Ошибка на сервере' });
-      // }
     });
 };
