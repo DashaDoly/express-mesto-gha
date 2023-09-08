@@ -34,23 +34,34 @@ module.exports.getCards = (req, res, next) => {
 
 module.exports.deleteCard = (req, res, next) => {
   Card.findById(req.params.cardId)
+    .orFail()
     .then((card) => {
       if (!card.owner.equals(req.user._id)) {
         throw new ForbiddenError('Карточка создана другим пользователем');
       }
       Card.deleteOne(card)
-        .orFail()
         .then(() => { res.status(HTTP_STATUS_OK).send({ message: 'Карточка удалена' }); })
         .catch(next);
     })
     .catch((err) => {
-      if (err.name === 'TypeError') {
-        next(new NotFoundError('Карточка с данным id не найдена'));
-      } else if (err instanceof mongoose.Error.CastError) {
-        next(new BadRequestError('Некорректный id карточки'));
-      } else {
-        next(err);
+      switch (err.constructor) {
+        case mongoose.Error.DocumentNotFoundError:
+          next(new NotFoundError('Карточка с данным id не найдена'));
+          break;
+        case mongoose.Error.CastError:
+          next(new BadRequestError('Некорректный id карточки'));
+          break;
+        default:
+          next(err);
+          break;
       }
+      // if (err instanceof mongoose.Error.DocumentNotFoundError) {
+      //   next(new NotFoundError('Карточка с данным id не найдена'));
+      // } else if (err instanceof mongoose.Error.CastError) {
+      //   next(new BadRequestError('Некорректный id карточки'));
+      // } else {
+      //   next(err);
+      // }
     });
 };
 
